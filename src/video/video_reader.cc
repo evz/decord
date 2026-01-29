@@ -703,8 +703,14 @@ NDArray VideoReader::GetBatch(std::vector<int64_t> indices, NDArray buf) {
             }
             NDArray frame = NextFrameImpl();
 
-            if (frame.Size() < 1 && eof_) {
-                LOG(FATAL) << "Error getting frame at: " << pos << " with total frames: " << frame_count;
+            if (frame.Size() < 1) {
+                // Frame couldn't be decoded - fill with black frame instead of crashing
+                LOG(WARNING) << "[" << filename_ << "]Unable to decode frame at position " << pos
+                  << ", filling with black frame.";
+                auto view = buf.CreateOffsetView(frame_shape, kUInt8, &offset);
+                // Zero-fill the view (black frame)
+                memset(view.data_->dl_tensor.data, 0, height_ * width_ * 3);
+                continue;
             }
             // copy frame to buffer
             // LOG(INFO) << "index: " << i << ", size: " << height_ * width_ * 3 * i <<  ", offset: " << offset << " Curr frame: " << frame.data_->dl_tensor.shape[0] << " x " << frame.data_->dl_tensor.shape[1] << " x " << frame.data_->dl_tensor.shape[2] << " Frame size: " << frame.Size();

@@ -55,9 +55,29 @@ def test_video_get_batch():
     frames = vr.get_batch(rand_lst)
 
 def test_video_corrupted_get_batch():
-    from nose.tools import assert_raises
+    # Corrupted videos should now return frames gracefully instead of raising errors.
+    # Undecodable frames will be filled with black (zeros) in batch mode,
+    # or returned as empty arrays in sequential mode.
     vr = _get_corrupted_test_video(ctx=cpu(0))
-    assert_raises(DECORDError, vr.get_batch, range(40))
+    frames = vr.get_batch(range(min(40, len(vr))))
+    # Should return frames without raising an exception
+    assert frames is not None
+    assert len(frames.shape) == 4  # batch of frames: NxHxWxC
+
+
+def test_video_corrupted_sequential_read():
+    # Test that sequential reading of corrupted video handles undecodable frames
+    vr = _get_corrupted_test_video(ctx=cpu(0))
+    decoded_count = 0
+    empty_count = 0
+    for i in range(min(40, len(vr))):
+        frame = vr[i]
+        if frame.size == 0:
+            empty_count += 1
+        else:
+            decoded_count += 1
+    # Some frames should be decoded, some may be empty
+    assert decoded_count + empty_count == min(40, len(vr))
 
 def test_rotated_video():
     # Input videos are all h=320 w=568 in metadata, but

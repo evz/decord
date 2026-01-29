@@ -110,13 +110,15 @@ class VideoReader(object):
         Returns
         -------
         ndarray
-            Frame with shape HxWx3.
+            Frame with shape HxWx3, or empty array if frame couldn't be decoded.
 
         """
         assert self._handle is not None
         arr = _CAPI_VideoReaderNextFrame(self._handle)
         if not arr.shape:
-            raise StopIteration()
+            # Return empty array instead of raising StopIteration
+            # This allows callers to handle undecodable frames gracefully
+            return bridge_out(arr)
         return bridge_out(arr)
 
     def _validate_indices(self, indices):
