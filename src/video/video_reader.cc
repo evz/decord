@@ -427,9 +427,12 @@ NDArray VideoReader::NextFrameImpl() {
                 break;
               } else {
                 if (rewind_offset > REWIND_RETRY_MAX) {
-                  LOG(FATAL) << "[" << filename_ << "]Unable to handle EOF because the video might have corrupted frames" 
-                  << "and `DECORD_REWIND_RETRY_MAX=" << REWIND_RETRY_MAX << "`. You may override the limit by `export DECORD_REWIND_RETRY_MAX=32`"
-                  << " for example to allow more auto-substituded frames, exit...";
+                  // Return empty frame instead of crashing - allows caller to handle
+                  // corrupted frames gracefully
+                  LOG(WARNING) << "[" << filename_ << "]Unable to decode frame " << curr_frame_
+                  << " after " << REWIND_RETRY_MAX << " rewind attempts. The video may have corrupted frames.";
+                  ++curr_frame_;
+                  return NDArray::Empty({}, kUInt8, ctx_);
                 }
                 SeekAccurate(curr_frame_ - rewind_offset);
                 ++rewind_offset;
@@ -441,9 +444,14 @@ NDArray VideoReader::NextFrameImpl() {
                 if (FetchCachedFrame(frame, curr_frame_)) {
                   break;
                 } else {
-                  LOG(FATAL) << "[" << filename_ << "]Unable to handle EOF because it takes too long to retrieve last few frames and "
-                  << "`DECORD_EOF_RETRY_MAX=" << EOF_RETRY_MAX << "`. You may override the limit by `export DECORD_EOF_RETRY_MAX=20480`"
-                  << " for example to allow more EOF retry attempts, exit...";
+                  // Return empty frame instead of crashing - allows caller to handle
+                  // partial extraction gracefully (e.g., when B-frames reference data
+                  // outside this video segment)
+                  LOG(WARNING) << "[" << filename_ << "]Unable to decode frame " << curr_frame_
+                  << " after " << EOF_RETRY_MAX << " retries. This may happen when video "
+                  << "segments have B-frames referencing data outside the segment.";
+                  ++curr_frame_;
+                  return NDArray::Empty({}, kUInt8, ctx_);
                 }
               }
               retry++;
